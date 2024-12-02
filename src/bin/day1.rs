@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic)]
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -11,6 +12,24 @@ fn to_vec_int(s: &str) -> Result<Vec<u32>, ParseIntError> {
     s.split_whitespace()
         .map(str::parse)
         .collect::<Result<Vec<_>, _>>()
+}
+
+/// Computes the similarity score between two slices.
+fn similarity_between(first: &[u32], second: &[u32]) -> usize {
+    let freqs = count_occurrences(second);
+    first
+        .iter()
+        .map(|n| *n as usize * freqs.get(n).unwrap_or(&0))
+        .sum()
+}
+
+/// Counts the occurrences of values in `nums`.
+fn count_occurrences(nums: &[u32]) -> HashMap<u32, usize> {
+    let mut m = HashMap::new();
+    for n in nums {
+        *m.entry(*n).or_default() += 1;
+    }
+    m
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -30,11 +49,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Compute distance.
     let distance: u32 = first_col
-        .into_iter()
-        .zip(second_col)
-        .map(|(d1, d2)| d1.abs_diff(d2))
+        .iter()
+        .zip(second_col.iter())
+        .map(|(d1, d2)| d1.abs_diff(*d2))
         .sum();
     println!("Distance: {distance}");
+
+    println!(
+        "Similarity: {}",
+        similarity_between(&first_col, &second_col)
+    );
 
     Ok(())
 }
