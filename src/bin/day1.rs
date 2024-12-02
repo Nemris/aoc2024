@@ -14,6 +14,15 @@ fn to_vec_int(s: &str) -> Result<Vec<u32>, ParseIntError> {
         .collect::<Result<Vec<_>, _>>()
 }
 
+/// Computes the difference score between two sorted slices of equal length.
+fn distance_between(first: &[u32], second: &[u32]) -> usize {
+    first
+        .iter()
+        .zip(second)
+        .map(|(d1, d2)| d1.abs_diff(*d2) as usize)
+        .sum()
+}
+
 /// Computes the similarity score between two slices.
 fn similarity_between(first: &[u32], second: &[u32]) -> usize {
     let freqs = count_occurrences(second);
@@ -47,13 +56,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     first_col.sort_unstable();
     second_col.sort_unstable();
 
-    // Compute distance.
-    let distance: u32 = first_col
-        .iter()
-        .zip(second_col.iter())
-        .map(|(d1, d2)| d1.abs_diff(*d2))
-        .sum();
-    println!("Distance: {distance}");
+    #[rustfmt::skip]
+    println!(
+        "Distance: {}",
+        distance_between(&first_col, &second_col)
+    );
 
     println!(
         "Similarity: {}",
