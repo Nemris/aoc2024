@@ -8,9 +8,13 @@ use std::path::PathBuf;
 
 type Level = u32;
 
-/// A report containing measurement levels.
-#[derive(Clone, Debug, PartialEq)]
-struct Report(Vec<Level>);
+#[allow(dead_code)]
+/// A report containing either safe or unsafe measurement levels.
+#[derive(Debug)]
+enum Report {
+    Safe(SafeReport),
+    Unsafe(UnsafeReport),
+}
 
 impl TryFrom<&str> for Report {
     type Error = ParseIntError;
@@ -20,33 +24,30 @@ impl TryFrom<&str> for Report {
             .split_whitespace()
             .map(str::parse)
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self(v))
+
+        if are_levels_safe(&v) {
+            return Ok(Self::Safe(SafeReport(v)));
+        }
+        Ok(Self::Unsafe(UnsafeReport(v)))
     }
 }
 
-impl Report {
-    /// Creates a new Report from the levels in `self`, excluding the one at `pos`.
-    fn new_excluding_level(&self, pos: usize) -> Self {
-        let v = self
-            .0
-            .iter()
-            .enumerate()
-            .filter(|&(i, _)| i != pos)
-            .map(|(_, v)| *v)
-            .collect();
-        Self(v)
-    }
+#[allow(dead_code)]
+/// A report containing safe levels.
+#[derive(Debug)]
+struct SafeReport(Vec<Level>);
 
-    /// Tries to build a safe Report if `self` is unsafe, by removing up to one level.
-    fn try_dampen(&self) -> Result<Self, &'static str> {
-        if self.is_safe() {
-            return Ok(self.clone());
-        }
+/// A report containing unsafe levels.
+#[derive(Debug)]
+struct UnsafeReport(Vec<Level>);
 
+impl UnsafeReport {
+    /// Tries to build a `SafeReport` by removing up to one level.
+    fn try_dampen(&self) -> Result<SafeReport, &'static str> {
         for (i, _) in self.0.iter().enumerate() {
-            let r = self.new_excluding_level(i);
-            if r.is_safe() {
-                return Ok(r);
+            let v = self.exclude_level(i);
+            if are_levels_safe(&v) {
+                return Ok(SafeReport(v));
             }
         }
 
@@ -54,22 +55,30 @@ impl Report {
         Err("cannot correct report error")
     }
 
-    /// Checks if this report's levels match safety rules.
-    fn is_safe(&self) -> bool {
-        if !self.is_sorted() {
-            return false;
-        }
+    /// Returns the levels in `self`, excluding the one at `pos`.
+    fn exclude_level(&self, pos: usize) -> Vec<Level> {
+        self.0
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| i != pos)
+            .map(|(_, v)| *v)
+            .collect()
+    }
+}
 
-        self.0.windows(2).all(|w| {
-            let d = w[0].abs_diff(w[1]);
-            d > 0 && d < 4
-        })
+/// Checks if a slice of levels matches safety rules.
+fn are_levels_safe(v: &[Level]) -> bool {
+    if !v.is_sorted() && !v.is_sorted_by(|a, b| a >= b) {
+        return false;
     }
 
-    /// Checks if this report is sorted in either ascending or descending order.
-    fn is_sorted(&self) -> bool {
-        self.0.is_sorted() || self.0.is_sorted_by(|a, b| a >= b)
+    if v.windows(2)
+        .any(|w| !(1..=3).contains(&w[0].abs_diff(w[1])))
+    {
+        return false;
     }
+
+    true
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -82,12 +91,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         reports.push(rep);
     }
 
-    let safe = reports.iter().filter(|r| r.is_safe()).count();
+    let safe = reports
+        .iter()
+        .filter(|&r| match r {
+            Report::Safe(_) => true,
+            Report::Unsafe(_) => false,
+        })
+        .count();
     let dampened = reports
         .iter()
-        .filter(|r| !r.is_safe())
-        .flat_map(Report::try_dampen)
+        .filter_map(|r| match r {
+            Report::Unsafe(r) => Some(r.try_dampen()),
+            Report::Safe(_) => None,
+        })
+        .flatten()
         .count();
+
     println!("Safe reports: {safe}",);
     println!("Dampened reports: {dampened}");
     println!("Total safe reports: {}", safe + dampened);
@@ -99,51 +118,55 @@ fn main() -> Result<(), Box<dyn Error>> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn report_passes_sample_tests() {
-        let r = Report::try_from("7 6 4 2 1").unwrap();
-        assert!(r.is_safe());
+    const GOOD_LEVELS: &[&[Level]] = &[&[7, 6, 4, 2, 1], &[1, 3, 6, 7, 9]];
+    const BAD_LEVELS: &[&[Level]] = &[&[1, 2, 7, 8, 9], &[9, 7, 6, 2, 1]];
+    const CORRECTIBLE_LEVELS: &[&[Level]] = &[&[1, 3, 2, 4, 5], &[8, 6, 4, 4, 1]];
 
-        let r = Report::try_from("1 2 7 8 9").unwrap();
-        assert!(!r.is_safe());
-
-        let r = Report::try_from("9 7 6 2 1").unwrap();
-        assert!(!r.is_safe());
-
-        let r = Report::try_from("1 3 2 4 5").unwrap();
-        assert!(!r.is_safe());
-
-        let r = Report::try_from("8 6 4 4 1").unwrap();
-        assert!(!r.is_safe());
-
-        let r = Report::try_from("1 3 6 7 9").unwrap();
-        assert!(r.is_safe());
+    fn stringify_levels(ls: &[Level]) -> String {
+        ls.iter()
+            .map(u32::to_string)
+            .collect::<Vec<String>>()
+            .join(" ")
     }
 
     #[test]
-    fn report_dampener_changes_nothing_if_report_is_safe() {
-        let r = Report(vec![7, 6, 4, 2, 1]);
-        assert!(r.try_dampen().is_ok_and(|r2| r2 == r));
+    fn report_from_str_succeeds() {
+        let strings = GOOD_LEVELS
+            .iter()
+            .chain(BAD_LEVELS)
+            .chain(CORRECTIBLE_LEVELS)
+            .map(|ls| stringify_levels(ls));
 
-        let r = Report(vec![1, 3, 6, 7, 9]);
-        assert!(r.try_dampen().is_ok_and(|r2| r2 == r));
+        for s in strings {
+            assert!(Report::try_from(&*s).is_ok());
+        }
     }
 
     #[test]
-    fn report_dampener_removes_one_bad_level() {
-        let r = Report(vec![1, 3, 2, 4, 5]);
-        assert!(r.try_dampen().is_ok_and(|r| r.is_safe()));
-
-        let r = Report(vec![8, 6, 4, 4, 1]);
-        assert!(r.try_dampen().is_ok_and(|r| r.is_safe()));
+    fn unsafereport_dampener_succeeds_for_correctible_levels() {
+        for l in CORRECTIBLE_LEVELS {
+            assert!(UnsafeReport(l.to_vec()).try_dampen().is_ok());
+        }
     }
 
     #[test]
-    fn report_dampener_bails_if_more_bad_levels() {
-        let r = Report(vec![1, 2, 7, 8, 9]);
-        assert!(r.try_dampen().is_err());
+    fn unsafereport_dampener_fails_for_bad_levels() {
+        for l in BAD_LEVELS {
+            assert!(UnsafeReport(l.to_vec()).try_dampen().is_err());
+        }
+    }
 
-        let r = Report(vec![9, 7, 6, 2, 1]);
-        assert!(r.try_dampen().is_err());
+    #[test]
+    fn level_safety_check_succeeds_for_good_levels() {
+        for l in GOOD_LEVELS {
+            assert!(are_levels_safe(l));
+        }
+    }
+
+    #[test]
+    fn level_safety_check_fails_for_bad_levels() {
+        for l in BAD_LEVELS.iter().chain(CORRECTIBLE_LEVELS) {
+            assert!(!are_levels_safe(l));
+        }
     }
 }
