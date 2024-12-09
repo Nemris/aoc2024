@@ -4,22 +4,30 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
+/// Orientation of a matrix.
 enum Orientation {
     Rows,
     Columns,
 }
 
+/// Direction of a diagonal.
 enum Direction {
     LeftToRight,
     RightToLeft,
 }
 
+/// An n*n matrix containing the haystack to examine.
 struct SquareMatrix {
+    /// Raw data.
     blob: Vec<char>,
+    /// Length of a side of the matrix.
     width: usize,
 }
 
 impl SquareMatrix {
+    /// Creates a new `SquareMatrix` from the data in `blob`.
+    ///
+    /// The square root of `blob`'s `.len()` must be an integer.
     fn new(blob: &[char]) -> Self {
         // Pretty hacky, but we expect the caller to not mess with us.
         #[allow(clippy::cast_sign_loss)]
@@ -88,6 +96,44 @@ impl SquareMatrix {
         matches
     }
 
+    /// Counts the occurrences of two diagonal `needle`s that intersect at their midpoint.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `needle`'s length is less than 3 or an even number.
+    fn count_intersections(&self, needle: &[char]) -> Result<usize, &'static str> {
+        if needle.len() < 3 || needle.len() % 2 == 0 {
+            return Err("invalid needle length");
+        }
+
+        let midpoint = needle.len() / 2;
+
+        let rows = self.rows();
+        let row_range = needle[..midpoint].len()..self.width - needle[midpoint + 1..].len();
+        let mut matches = 0;
+        for i in row_range {
+            let col_range = midpoint..self.width - midpoint;
+            for j in col_range {
+                if rows[i][j] != needle[midpoint] {
+                    continue;
+                }
+
+                let rows = &rows[(i - midpoint)..=(i + midpoint)];
+                let ltr_diag = get_diagonal(rows, j - midpoint, &Direction::LeftToRight);
+                if !slices_match(&ltr_diag, needle) {
+                    continue;
+                }
+
+                let rtl_diag = get_diagonal(rows, j + midpoint, &Direction::RightToLeft);
+                if slices_match(&rtl_diag, needle) {
+                    matches += 1;
+                }
+            }
+        }
+
+        Ok(matches)
+    }
+
     /// Returns the rows in `self`.
     fn rows(&self) -> Vec<Vec<char>> {
         self.blob
@@ -143,11 +189,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .chars()
         .filter(|&c| c != '\n')
         .collect::<Vec<_>>();
-
-    let needle = "XMAS".chars().collect::<Vec<_>>();
     let matrix = SquareMatrix::new(&data);
 
+    let needle = "XMAS".chars().collect::<Vec<_>>();
     println!("Occurrences in matrix: {}", matrix.count_in_matrix(&needle));
+
+    let needle = "MAS".chars().collect::<Vec<_>>();
+    println!("Intersections: {}", matrix.count_intersections(&needle)?);
 
     Ok(())
 }
@@ -210,5 +258,13 @@ mod tests {
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count_in_matrix(&needle), 18);
+    }
+
+    #[test]
+    fn square_matrix_finds_intersected_needle_in_self() {
+        let sm = SquareMatrix::new(&get_test_data());
+        let needle: Vec<char> = "MAS".chars().collect();
+
+        assert_eq!(sm.count_intersections(&needle).unwrap(), 9);
     }
 }
