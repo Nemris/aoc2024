@@ -28,14 +28,19 @@ impl SquareMatrix {
     /// Creates a new `SquareMatrix` from the data in `blob`.
     ///
     /// The square root of `blob`'s `.len()` must be an integer.
-    fn new(blob: &[char]) -> Self {
-        // Pretty hacky, but we expect the caller to not mess with us.
-        #[allow(clippy::cast_sign_loss)]
+    fn new(blob: &[char]) -> Result<Self, &'static str> {
+        // Pretty hacky, but passing correct data is on the caller.
         #[allow(clippy::cast_precision_loss)]
+        let width = (blob.len() as f64).sqrt();
+        if width.fract() != 0.0 {
+            return Err("invalid matrix shape");
+        }
         #[allow(clippy::cast_possible_truncation)]
-        let width = (blob.len() as f64).sqrt() as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let width = width as usize;
+
         let blob = blob.to_vec();
-        Self { blob, width }
+        Ok(Self { blob, width })
     }
 
     fn count_in_matrix(&self, needle: &[char]) -> usize {
@@ -72,21 +77,16 @@ impl SquareMatrix {
     fn count_in_diagonals(&self, direction: &Direction, needle: &[char]) -> usize {
         let rows = self.rows();
 
-        let first_row = 0;
-        let last_row = self.width - needle.len() + 1;
-        let first_char = match direction {
-            Direction::LeftToRight => 0,
-            Direction::RightToLeft => needle.len() - 1,
-        };
-        let last_char = match direction {
-            Direction::LeftToRight => self.width - needle.len() + 1,
-            Direction::RightToLeft => self.width,
+        let row_range = 0..=(self.width - needle.len());
+        let col_range = match direction {
+            Direction::LeftToRight => 0..self.width + 1 - needle.len(),
+            Direction::RightToLeft => needle.len() - 1..self.width,
         };
 
         let mut matches = 0;
-        for i in first_row..last_row {
-            for j in first_char..last_char {
-                let w = get_diagonal(&rows[i..i + needle.len()], j, direction);
+        for y in row_range {
+            for x in col_range.clone() {
+                let w = get_diagonal(&rows[y..y + needle.len()], x, direction);
                 if slices_match(&w, needle) {
                     matches += 1;
                 }
@@ -110,21 +110,22 @@ impl SquareMatrix {
 
         let rows = self.rows();
         let row_range = needle[..midpoint].len()..self.width - needle[midpoint + 1..].len();
+        let col_range = midpoint..self.width - midpoint;
+
         let mut matches = 0;
-        for i in row_range {
-            let col_range = midpoint..self.width - midpoint;
-            for j in col_range {
-                if rows[i][j] != needle[midpoint] {
+        for y in row_range {
+            for x in col_range.clone() {
+                if rows[y][x] != needle[midpoint] {
                     continue;
                 }
 
-                let rows = &rows[(i - midpoint)..=(i + midpoint)];
-                let ltr_diag = get_diagonal(rows, j - midpoint, &Direction::LeftToRight);
+                let rows = &rows[(y - midpoint)..=(y + midpoint)];
+                let ltr_diag = get_diagonal(rows, x - midpoint, &Direction::LeftToRight);
                 if !slices_match(&ltr_diag, needle) {
                     continue;
                 }
 
-                let rtl_diag = get_diagonal(rows, j + midpoint, &Direction::RightToLeft);
+                let rtl_diag = get_diagonal(rows, x + midpoint, &Direction::RightToLeft);
                 if slices_match(&rtl_diag, needle) {
                     matches += 1;
                 }
@@ -189,7 +190,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .chars()
         .filter(|&c| c != '\n')
         .collect::<Vec<_>>();
-    let matrix = SquareMatrix::new(&data);
+    let matrix = SquareMatrix::new(&data)?;
 
     let needle = "XMAS".chars().collect::<Vec<_>>();
     println!("Occurrences in matrix: {}", matrix.count_in_matrix(&needle));
@@ -222,7 +223,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_needle_in_rows() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count(&Orientation::Rows, &needle), 5);
@@ -230,7 +231,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_needle_in_cols() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count(&Orientation::Columns, &needle), 3);
@@ -238,7 +239,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_needle_in_ltr_diagonals() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count_in_diagonals(&Direction::LeftToRight, &needle), 5);
@@ -246,7 +247,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_needle_in_rtl_diagonals() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count_in_diagonals(&Direction::RightToLeft, &needle), 5);
@@ -254,7 +255,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_needle_in_self() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "XMAS".chars().collect();
 
         assert_eq!(sm.count_in_matrix(&needle), 18);
@@ -262,7 +263,7 @@ mod tests {
 
     #[test]
     fn square_matrix_finds_intersected_needle_in_self() {
-        let sm = SquareMatrix::new(&get_test_data());
+        let sm = SquareMatrix::new(&get_test_data()).unwrap();
         let needle: Vec<char> = "MAS".chars().collect();
 
         assert_eq!(sm.count_intersections(&needle).unwrap(), 9);
