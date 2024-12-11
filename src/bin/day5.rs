@@ -68,9 +68,37 @@ impl Update {
         rules.iter().all(|r| r.is_valid(self))
     }
 
+    /// Applies all the `rules` until `self` is corrected.
+    fn apply_all(&mut self, rules: &[Rule]) {
+        // NOTE: very slow.
+        while let Some(r) = self.next_failed_rule(rules) {
+            self.apply(r);
+        }
+    }
+
+    /// Applies a single `rule` to correct `self`.
+    fn apply(&mut self, rule: &Rule) {
+        let x_pos = self
+            .0
+            .iter()
+            .position(|&n| n == rule.x)
+            .expect("the position should exist");
+        let y_pos = self
+            .0
+            .iter()
+            .position(|&n| n == rule.y)
+            .expect("the position should exist");
+        self.0.swap(x_pos, y_pos);
+    }
+
     /// Returns the page number at `self`'s middle.
     fn middle_page(&self) -> u32 {
         self.0[self.0.len() / 2]
+    }
+
+    /// Returns the next rule that `self` fails to respect.
+    fn next_failed_rule<'r>(&self, rules: &'r [Rule]) -> Option<&'r Rule> {
+        rules.iter().find(|r| !r.is_valid(self))
     }
 
     /// Returns an iterator over `self`'s pages.
@@ -100,6 +128,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(Update::middle_page)
         .sum();
     println!("Sum of middle pages: {total}");
+
+    let mut bad_updates: Vec<Update> = updates
+        .into_iter()
+        .filter(|u| !u.is_valid(&rules))
+        .collect();
+    for u in &mut bad_updates {
+        u.apply_all(&rules);
+    }
+    let total: u32 = bad_updates.iter().map(Update::middle_page).sum();
+    println!("Sum of middle pages (fixed updates): {total}");
 
     Ok(())
 }
@@ -158,5 +196,20 @@ mod tests {
         let total: u32 = updates.iter().map(Update::middle_page).sum();
 
         assert_eq!(total, 143);
+    }
+
+    #[test]
+    fn fixed_updates_evaluate_to_correct_value() {
+        let rules = get_test_rules();
+        let mut updates: Vec<Update> = get_test_updates()
+            .into_iter()
+            .filter(|u| !u.is_valid(&rules))
+            .collect();
+
+        for u in updates.iter_mut() {
+            u.apply_all(&rules);
+        }
+        let total: u32 = updates.iter().map(Update::middle_page).sum();
+        assert_eq!(total, 123);
     }
 }
