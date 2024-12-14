@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::iter::Iterator;
 use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -87,12 +86,12 @@ impl Update {
     }
 }
 
-/// Sums the middle pages of `Update`s in `iter`.
-fn sum_middle_pages<'a, I>(iter: I) -> u32
+/// Sums the middle pages of `updates`.
+fn sum_middle_pages<'a, I>(updates: I) -> u32
 where
-    I: Iterator<Item = &'a Update>,
+    I: IntoIterator<Item = &'a Update>,
 {
-    iter.map(Update::middle_page).sum()
+    updates.into_iter().map(Update::middle_page).sum()
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -125,7 +124,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     println!(
         "Sum of middle pages (after sorting): {}",
-        sum_middle_pages(sorted.iter())
+        sum_middle_pages(&sorted)
     );
 
     Ok(())
@@ -184,7 +183,7 @@ mod tests {
             .filter(|u| u.is_sorted(&rules))
             .collect();
 
-        assert_eq!(sum_middle_pages(updates.iter()), 143);
+        assert_eq!(sum_middle_pages(&updates), 143);
     }
 
     #[test]
@@ -199,6 +198,6 @@ mod tests {
             u.sort(&rules);
         }
 
-        assert_eq!(sum_middle_pages(updates.iter()), 123);
+        assert_eq!(sum_middle_pages(&updates), 123);
     }
 }
