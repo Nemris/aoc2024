@@ -183,13 +183,12 @@ mod tests {
             .into_iter()
             .filter(|u| u.is_sorted(&rules))
             .collect();
-        let total: u32 = updates.iter().map(Update::middle_page).sum();
 
-        assert_eq!(total, 143);
+        assert_eq!(sum_middle_pages(updates.iter()), 143);
     }
 
     #[test]
-    fn fixed_updates_evaluate_to_correct_value() {
+    fn sorted_updates_evaluate_to_correct_value() {
         let rules = get_test_rules();
         let mut updates: Vec<Update> = get_test_updates()
             .into_iter()
@@ -199,7 +198,7 @@ mod tests {
         for u in &mut updates {
             u.sort(&rules);
         }
-        let total: u32 = updates.iter().map(Update::middle_page).sum();
-        assert_eq!(total, 123);
+
+        assert_eq!(sum_middle_pages(updates.iter()), 123);
     }
 }
