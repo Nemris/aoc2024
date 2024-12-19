@@ -65,9 +65,9 @@ struct Guard {
 }
 
 impl Guard {
-    /// Attempts to detect a guard in `tiles`.
-    fn find_in_tiles(tiles: &[Tile]) -> Option<Self> {
-        for (i, t) in tiles.iter().enumerate() {
+    /// Attempts to detect a guard in `map`.
+    fn find(map: &Map) -> Option<Self> {
+        for (i, t) in map.tiles.iter().enumerate() {
             if let Tile::Guard(d) = t {
                 return Some(Guard {
                     direction: *d,
@@ -76,6 +76,46 @@ impl Guard {
             }
         }
         None
+    }
+
+    /// Patrols `map` until `self` exits the room from an edge.
+    fn patrol(&mut self, map: &mut Map) {
+        while self.position < map.tiles.len() {
+            self.patrol_line(map);
+        }
+    }
+
+    /// Performs patrolling of the area between `self` and the next obstacle.
+    ///
+    /// Once an obstacle is found, `self` rotates clockwise by 90 degrees.
+    fn patrol_line(&mut self, map: &mut Map) {
+        #[allow(clippy::cast_possible_wrap)]
+        let offset: isize = match self.direction {
+            Direction::Up => -(map.width as isize),
+            Direction::Down => map.width as isize,
+            Direction::Left => -1,
+            Direction::Right => 1,
+        };
+
+        while let Some(next_pos) = self.position.checked_add_signed(offset) {
+            // The guard exits the room.
+            if next_pos >= map.tiles.len() {
+                map.tiles[self.position] = Tile::Visited;
+                self.position = next_pos;
+                break;
+            }
+
+            // The guard bumps on an obstacle.
+            if map.tiles[next_pos] == Tile::Occupied {
+                self.turn();
+                map.tiles[self.position] = Tile::Guard(self.direction);
+                break;
+            }
+
+            // All good, keep going.
+            map.tiles[self.position] = Tile::Visited;
+            self.position = next_pos;
+        }
     }
 
     /// Turns `self` clockwise by one step.
@@ -127,7 +167,6 @@ impl TryFrom<char> for Direction {
 #[derive(Debug)]
 struct Map {
     tiles: Vec<Tile>,
-    guard: Guard,
     width: usize,
     height: usize,
 }
@@ -156,61 +195,16 @@ impl Map {
         let height = tiles.len();
 
         let tiles: Vec<Tile> = tiles.into_iter().flatten().collect();
-        let Some(guard) = Guard::find_in_tiles(&tiles) else {
-            return Err(Error::NoGuard);
-        };
-
         Ok(Self {
             tiles,
-            guard,
             width,
             height,
         })
     }
 
-    /// Patrols `self` until the guard exits the room from an edge.
-    fn patrol(&mut self) {
-        while self.guard.position < self.tiles.len() {
-            self.patrol_line();
-        }
-    }
-
-    /// Counts the amount of tiles visited while patrolling.
+    /// Counts the amount of tiles visited by a `Guard`.
     fn visited_tiles(&self) -> usize {
         self.tiles.iter().filter(|&t| *t == Tile::Visited).count()
-    }
-
-    /// Performs patrolling of the area between the guard and the next obstacle.
-    ///
-    /// The guard turns clockwise by 90 degrees once an obstacle is found.
-    fn patrol_line(&mut self) {
-        #[allow(clippy::cast_possible_wrap)]
-        let offset: isize = match self.guard.direction {
-            Direction::Up => -(self.width as isize),
-            Direction::Down => self.width as isize,
-            Direction::Left => -1,
-            Direction::Right => 1,
-        };
-
-        while let Some(next_pos) = self.guard.position.checked_add_signed(offset) {
-            // The guard exits the room.
-            if next_pos >= self.tiles.len() {
-                self.tiles[self.guard.position] = Tile::Visited;
-                self.guard.position = next_pos;
-                break;
-            }
-
-            // The guard bumps on an obstacle.
-            if self.tiles[next_pos] == Tile::Occupied {
-                self.guard.turn();
-                self.tiles[self.guard.position] = Tile::Guard(self.guard.direction);
-                break;
-            }
-
-            // All good, keep going.
-            self.tiles[self.guard.position] = Tile::Visited;
-            self.guard.position = next_pos;
-        }
     }
 }
 
@@ -219,7 +213,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let data = fs::read_to_string(dataset)?;
 
     let mut map = Map::new(&data)?;
-    map.patrol();
+    let mut guard = Guard::find(&map).ok_or(Error::NoGuard)?;
+    guard.patrol(&mut map);
     println!("Visited tiles: {}", map.visited_tiles());
 
     Ok(())
@@ -251,8 +246,9 @@ mod tests {
     #[test]
     fn map_finds_guard_position() {
         let m = get_test_data();
+        let g = Guard::find(&m);
         assert_eq!(
-            Guard::find_in_tiles(&m.tiles),
+            g,
             Some(Guard {
                 direction: Direction::Up,
                 position: 64
@@ -263,9 +259,9 @@ mod tests {
     #[test]
     fn map_counts_visited_tiles() {
         let mut m = get_test_data();
-        m.patrol();
+        let mut g = Guard::find(&m).unwrap();
+        g.patrol(&mut m);
 
-        let visited = m.tiles.into_iter().filter(|&t| t == Tile::Visited).count();
-        assert_eq!(visited, 41);
+        assert_eq!(m.visited_tiles(), 41);
     }
 }
