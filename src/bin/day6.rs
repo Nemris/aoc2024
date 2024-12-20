@@ -120,9 +120,9 @@ impl Guard {
         Ok(())
     }
 
-    /// Returns the amount of unique tiles visited.
-    fn unique_visits(&self) -> usize {
-        self.visited.iter().copied().collect::<HashSet<_>>().len()
+    /// Returns the coordinates of unique tiles visited.
+    fn unique_visits(&self) -> HashSet<usize> {
+        self.visited.iter().copied().collect::<HashSet<_>>()
     }
 
     /// Turns `self` clockwise by one step.
@@ -273,10 +273,12 @@ fn main() -> result::Result<(), Box<dyn error::Error>> {
     let mut guard = Guard::find(&map).ok_or(Error::NoGuard)?;
 
     guard.patrol(&map)?;
-    println!("Visited tiles: {}", guard.unique_visits());
+    println!("Visited tiles: {}", guard.unique_visits().len());
 
-    let unique_tiles = guard.visited.iter().copied().collect::<HashSet<_>>();
-    println!("Infinite loops: {}", count_loops(unique_tiles, &mut map)?);
+    println!(
+        "Infinite loops: {}",
+        count_loops(guard.unique_visits(), &mut map)?
+    );
 
     Ok(())
 }
@@ -359,7 +361,7 @@ mod tests {
         let mut g = Guard::find(&m).unwrap();
         g.patrol(&m).unwrap();
 
-        assert_eq!(g.unique_visits(), 41);
+        assert_eq!(g.unique_visits().len(), 41);
     }
 
     #[test]
