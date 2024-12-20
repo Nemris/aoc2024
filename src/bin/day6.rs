@@ -66,12 +66,14 @@ struct Guard {
 impl Guard {
     /// Attempts to detect a guard in `map`.
     fn find(map: &Map) -> Option<Self> {
+        let obstacles = map.count_obstacles();
         for (i, t) in map.tiles.iter().enumerate() {
             if let Tile::Guard(d) = t {
                 return Some(Guard {
                     direction: *d,
                     position: i,
-                    ..Default::default()
+                    visited: Vec::with_capacity(map.tiles.len() - obstacles),
+                    obstacles: HashMap::with_capacity(obstacles),
                 });
             }
         }
@@ -199,10 +201,12 @@ impl Map {
         let width = tiles[0].len();
 
         let tiles: Vec<Tile> = tiles.into_iter().flatten().collect();
-        Ok(Self {
-            tiles,
-            width,
-        })
+        Ok(Self { tiles, width })
+    }
+
+    /// Returns the amount of obstacles in `self`.
+    fn count_obstacles(&self) -> usize {
+        self.tiles.iter().filter(|&t| *t == Tile::Occupied).count()
     }
 }
 
@@ -325,6 +329,12 @@ mod tests {
         g.patrol(&m).unwrap();
 
         assert_eq!(g.unique_visits().len(), 41);
+    }
+
+    #[test]
+    fn map_returns_correct_obstacle_count() {
+        let m = get_test_data();
+        assert_eq!(m.count_obstacles(), 8);
     }
 
     #[test]
