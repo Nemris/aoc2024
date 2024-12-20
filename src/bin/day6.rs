@@ -33,7 +33,6 @@ impl error::Error for Error {}
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Tile {
     Ignored,
-    Visited,
     Occupied,
     Guard(Direction),
 }
@@ -42,7 +41,6 @@ impl From<Tile> for char {
     fn from(t: Tile) -> Self {
         match t {
             Tile::Ignored => '.',
-            Tile::Visited => 'X',
             Tile::Occupied => '#',
             Tile::Guard(d) => d.into(),
         }
@@ -55,7 +53,6 @@ impl TryFrom<char> for Tile {
     fn try_from(c: char) -> Result<Self> {
         match c {
             '.' => Ok(Tile::Ignored),
-            'X' => Ok(Tile::Visited),
             '#' => Ok(Tile::Occupied),
             '^' | 'v' | '<' | '>' => Ok(Tile::Guard(c.try_into().unwrap())),
             _ => Err(Error::InvalidTile),
