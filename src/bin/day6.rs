@@ -70,6 +70,8 @@ struct Guard {
     direction: Direction,
     // Current position.
     position: usize,
+    /// Visited tiles. The first one is the starting position.
+    visited: Vec<usize>,
     // Obstacles encountered and the direction they were approached in.
     obstacles: HashMap<usize, HashSet<Direction>>,
 }
@@ -82,7 +84,7 @@ impl Guard {
                 return Some(Guard {
                     direction: *d,
                     position: i,
-                    obstacles: HashMap::new(),
+                    ..Default::default()
                 });
             }
         }
@@ -94,47 +96,36 @@ impl Guard {
     /// # Errors
     ///
     /// If an infinite loop is detected, an error is returned.
-    fn patrol(&mut self, map: &mut Map) -> Result<()> {
-        while self.position < map.tiles.len() {
-            self.patrol_line(map)?;
-        }
-        Ok(())
-    }
+    fn patrol(&mut self, map: &Map) -> Result<()> {
+        loop {
+            let offset = self.compute_offset(map);
+            let Some(next_pos) = self.position.checked_add_signed(offset) else {
+                break;
+            };
 
-    /// Performs patrolling of the area between `self` and the next obstacle.
-    ///
-    /// Once an obstacle is found, `self` rotates clockwise by 90 degrees.
-    ///
-    /// # Errors
-    ///
-    /// If an infinite loop is detected, an error is returned.
-    fn patrol_line(&mut self, map: &mut Map) -> Result<()> {
-        let offset = self.compute_offset(map);
-
-        while let Some(next_pos) = self.position.checked_add_signed(offset) {
-            // The guard exits the room.
             if next_pos >= map.tiles.len() {
-                map.tiles[self.position] = Tile::Visited;
-                self.position = next_pos;
+                // The guard exits the room.
+                self.visited.push(self.position);
                 break;
             }
-
-            // The guard bumps on an obstacle.
             if map.tiles[next_pos] == Tile::Occupied {
+                // The guard bumps on an obstacle.
                 // Bail if an infinite loop is detected.
                 self.log_obstacle(next_pos, self.direction)?;
-
                 self.turn();
-                map.tiles[self.position] = Tile::Guard(self.direction);
-                break;
+                continue;
             }
 
-            // All good, keep going.
-            map.tiles[self.position] = Tile::Visited;
+            self.visited.push(self.position);
             self.position = next_pos;
         }
 
         Ok(())
+    }
+
+    /// Returns the amount of unique tiles visited.
+    fn unique_visits(&self) -> usize {
+        self.visited.iter().copied().collect::<HashSet<_>>().len()
     }
 
     /// Turns `self` clockwise by one step.
@@ -245,22 +236,17 @@ impl Map {
             height,
         })
     }
-
-    /// Counts the amount of tiles visited by a `Guard`.
-    fn visited_tiles(&self) -> usize {
-        self.tiles.iter().filter(|&t| *t == Tile::Visited).count()
-    }
 }
 
 fn main() -> result::Result<(), Box<dyn error::Error>> {
     let dataset = aoc2024::get_dataset(&PathBuf::from(file!()), "input.txt");
     let data = fs::read_to_string(dataset)?;
 
-    let mut map = Map::new(&data)?;
+    let map = Map::new(&data)?;
     let mut guard = Guard::find(&map).ok_or(Error::NoGuard)?;
 
-    guard.patrol(&mut map)?;
-    println!("Visited tiles: {}", map.visited_tiles());
+    guard.patrol(&map)?;
+    println!("Visited tiles: {}", guard.unique_visits());
 
     Ok(())
 }
@@ -316,33 +302,33 @@ mod tests {
             Some(Guard {
                 direction: Direction::Up,
                 position: 64,
-                obstacles: HashMap::new()
+                ..Default::default()
             })
         );
     }
 
     #[test]
     fn guard_traverses_non_looping_map() {
-        let mut m = get_test_data();
+        let m = get_test_data();
         let mut g = Guard::find(&m).unwrap();
 
-        assert!(g.patrol(&mut m).is_ok());
+        assert!(g.patrol(&m).is_ok());
     }
 
     #[test]
     fn guard_detects_infinite_loop() {
-        let mut m = get_looping_map();
+        let m = get_looping_map();
         let mut g = Guard::find(&m).unwrap();
 
-        assert!(g.patrol(&mut m).is_err());
+        assert!(g.patrol(&m).is_err());
     }
 
     #[test]
     fn map_counts_visited_tiles() {
-        let mut m = get_test_data();
+        let m = get_test_data();
         let mut g = Guard::find(&m).unwrap();
-        g.patrol(&mut m).unwrap();
+        g.patrol(&m).unwrap();
 
-        assert_eq!(m.visited_tiles(), 41);
+        assert_eq!(g.unique_visits(), 41);
     }
 }
