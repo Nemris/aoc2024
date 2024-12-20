@@ -37,16 +37,6 @@ enum Tile {
     Guard(Direction),
 }
 
-impl From<Tile> for char {
-    fn from(t: Tile) -> Self {
-        match t {
-            Tile::Ignored => '.',
-            Tile::Occupied => '#',
-            Tile::Guard(d) => d.into(),
-        }
-    }
-}
-
 impl TryFrom<char> for Tile {
     type Error = Error;
 
@@ -178,17 +168,6 @@ enum Direction {
     Right,
 }
 
-impl From<Direction> for char {
-    fn from(d: Direction) -> Self {
-        match d {
-            Direction::Up => '^',
-            Direction::Down => 'v',
-            Direction::Left => '<',
-            Direction::Right => '>',
-        }
-    }
-}
-
 impl TryFrom<char> for Direction {
     type Error = Error;
 
@@ -208,20 +187,6 @@ impl TryFrom<char> for Direction {
 struct Map {
     tiles: Vec<Tile>,
     width: usize,
-    height: usize,
-}
-
-impl fmt::Display for Map {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut s = String::with_capacity(self.width * self.height + self.height - 1);
-        for r in self.tiles.chunks_exact(self.width) {
-            for c in r.iter().map(|&t| t.into()) {
-                s.push(c);
-            }
-            s.push('\n');
-        }
-        write!(f, "{s}")
-    }
 }
 
 impl Map {
@@ -232,13 +197,11 @@ impl Map {
             .map(|s| s.chars().map(Tile::try_from).collect())
             .collect::<result::Result<Vec<_>, _>>()?;
         let width = tiles[0].len();
-        let height = tiles.len();
 
         let tiles: Vec<Tile> = tiles.into_iter().flatten().collect();
         Ok(Self {
             tiles,
             width,
-            height,
         })
     }
 }
