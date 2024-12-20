@@ -100,7 +100,7 @@ impl Guard {
                 break;
             };
 
-            if next_pos >= map.tiles.len() {
+            if self.is_out_of_bounds(next_pos, map) {
                 // The guard exits the room.
                 self.visited.push(self.position);
                 break;
@@ -132,6 +132,14 @@ impl Guard {
             Direction::Down => Direction::Left,
             Direction::Left => Direction::Up,
             Direction::Right => Direction::Down,
+        }
+    }
+
+    /// Checks if `next_pos` is out of `map`'s bounds, either horizontally or vertically.
+    fn is_out_of_bounds(&self, next_pos: usize, map: &Map) -> bool {
+        match self.direction {
+            Direction::Up | Direction::Down => next_pos >= map.tiles.len(),
+            Direction::Left | Direction::Right => next_pos / map.width != self.position / map.width,
         }
     }
 
