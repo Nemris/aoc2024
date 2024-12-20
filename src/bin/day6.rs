@@ -109,13 +109,7 @@ impl Guard {
     ///
     /// If an infinite loop is detected, an error is returned.
     fn patrol_line(&mut self, map: &mut Map) -> Result<()> {
-        #[allow(clippy::cast_possible_wrap)]
-        let offset: isize = match self.direction {
-            Direction::Up => -(map.width as isize),
-            Direction::Down => map.width as isize,
-            Direction::Left => -1,
-            Direction::Right => 1,
-        };
+        let offset = self.compute_offset(map);
 
         while let Some(next_pos) = self.position.checked_add_signed(offset) {
             // The guard exits the room.
@@ -164,6 +158,17 @@ impl Guard {
             Ok(())
         } else {
             Err(Error::InfiniteLoop)
+        }
+    }
+
+    /// Computes the offset to reach the next `map` tile in `self.direction`.
+    fn compute_offset(&self, map: &Map) -> isize {
+        #[allow(clippy::cast_possible_wrap)]
+        match self.direction {
+            Direction::Up => -(map.width as isize),
+            Direction::Down => map.width as isize,
+            Direction::Left => -1,
+            Direction::Right => 1,
         }
     }
 }
@@ -320,7 +325,7 @@ mod tests {
     fn guard_traverses_non_looping_map() {
         let mut m = get_test_data();
         let mut g = Guard::find(&m).unwrap();
-        
+
         assert!(g.patrol(&mut m).is_ok());
     }
 
@@ -328,7 +333,7 @@ mod tests {
     fn guard_detects_infinite_loop() {
         let mut m = get_looping_map();
         let mut g = Guard::find(&m).unwrap();
-        
+
         assert!(g.patrol(&mut m).is_err());
     }
 
