@@ -53,13 +53,13 @@ impl TryFrom<char> for Tile {
 /// A guard patrolling a map.
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Guard {
-    // Direction the guard is walking in.
+    /// Direction the guard is walking in.
     direction: Direction,
-    // Current position.
+    /// Current position.
     position: usize,
     /// Visited tiles. The first one is the starting position.
     visited: Vec<usize>,
-    // Obstacles encountered and the direction they were approached in.
+    /// Obstacles encountered and the direction they were approached in.
     obstacles: HashMap<usize, HashSet<Direction>>,
 }
 
