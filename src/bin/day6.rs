@@ -187,7 +187,9 @@ impl TryFrom<char> for Direction {
 /// A map of tiles, with a guard on patrol.
 #[derive(Debug)]
 struct Map {
+    /// The tiles that compose the map.
     tiles: Vec<Tile>,
+    /// Width of a single row.
     width: usize,
 }
 
@@ -254,7 +256,7 @@ fn main() -> result::Result<(), Box<dyn error::Error>> {
 mod tests {
     use super::*;
 
-    fn get_test_data() -> Map {
+    fn get_test_map() -> Map {
         let s: String = vec![
             "....#.....\n",
             ".........#\n",
@@ -294,7 +296,7 @@ mod tests {
 
     #[test]
     fn guard_finds_own_position_in_map() {
-        let m = get_test_data();
+        let m = get_test_map();
         let g = Guard::find(&m);
         assert_eq!(
             g,
@@ -308,7 +310,7 @@ mod tests {
 
     #[test]
     fn guard_traverses_non_looping_map() {
-        let m = get_test_data();
+        let m = get_test_map();
         let mut g = Guard::find(&m).unwrap();
 
         assert!(g.patrol(&m).is_ok());
@@ -323,8 +325,8 @@ mod tests {
     }
 
     #[test]
-    fn map_counts_visited_tiles() {
-        let m = get_test_data();
+    fn guard_counts_visited_tiles() {
+        let m = get_test_map();
         let mut g = Guard::find(&m).unwrap();
         g.patrol(&m).unwrap();
 
@@ -333,13 +335,13 @@ mod tests {
 
     #[test]
     fn map_returns_correct_obstacle_count() {
-        let m = get_test_data();
+        let m = get_test_map();
         assert_eq!(m.count_obstacles(), 8);
     }
 
     #[test]
     fn possible_infinite_loops_are_found() {
-        let mut m = get_test_data();
+        let mut m = get_test_map();
         let mut g = Guard::find(&m).unwrap();
         g.patrol(&m).unwrap();
 
