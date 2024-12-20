@@ -10,7 +10,7 @@ use std::result;
 type Result<T> = result::Result<T, Error>;
 
 /// Possible errors for this program.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Error {
     InvalidTile,
     NoGuard,
@@ -243,15 +243,40 @@ impl Map {
     }
 }
 
+fn count_loops<I>(tiles: I, map: &mut Map) -> Result<usize>
+where
+    I: IntoIterator<Item = usize>,
+{
+    let base_guard = Guard::find(map).ok_or(Error::NoGuard)?;
+    let mut loops = 0;
+    for tile in tiles {
+        if tile == base_guard.position {
+            continue;
+        }
+
+        let mut guard = base_guard.clone();
+        map.tiles[tile] = Tile::Occupied;
+        if let Err(Error::InfiniteLoop) = guard.patrol(map) {
+            loops += 1;
+        }
+        map.tiles[tile] = Tile::Ignored;
+    }
+
+    Ok(loops)
+}
+
 fn main() -> result::Result<(), Box<dyn error::Error>> {
     let dataset = aoc2024::get_dataset(&PathBuf::from(file!()), "input.txt");
     let data = fs::read_to_string(dataset)?;
 
-    let map = Map::new(&data)?;
+    let mut map = Map::new(&data)?;
     let mut guard = Guard::find(&map).ok_or(Error::NoGuard)?;
 
     guard.patrol(&map)?;
     println!("Visited tiles: {}", guard.unique_visits());
+
+    let unique_tiles = guard.visited.iter().copied().collect::<HashSet<_>>();
+    println!("Infinite loops: {}", count_loops(unique_tiles, &mut map)?);
 
     Ok(())
 }
@@ -335,5 +360,15 @@ mod tests {
         g.patrol(&m).unwrap();
 
         assert_eq!(g.unique_visits(), 41);
+    }
+
+    #[test]
+    fn possible_infinite_loops_are_found() {
+        let mut m = get_test_data();
+        let mut g = Guard::find(&m).unwrap();
+        g.patrol(&m).unwrap();
+
+        let unique_tiles = g.visited.iter().copied().collect::<HashSet<_>>();
+        assert_eq!(count_loops(unique_tiles, &mut m), Ok(6));
     }
 }
