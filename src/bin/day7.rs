@@ -68,34 +68,24 @@ impl Equation {
 
         let mut total = self.result;
         for (i, v) in self.values.iter().rev().enumerate() {
-            if total % v != 0 {
-                total = match total.checked_sub(*v) {
-                    Some(t) => t,
-                    None => return false,
+            if *v > total {
+                return false;
+            }
+
+            if total % v == 0 {
+                // Since `v` is a divisor, let's try that possible path first.
+                let sub_eq = Equation {
+                    result: total / v,
+                    values: self.values[..self.values.len() - (i + 1)].to_vec(),
                 };
-                continue;
+                if sub_eq.is_valid() {
+                    return true;
+                }
             }
 
-            // Since `v` is a divisor, let's try that possible path first.
-            let mut sub_eq = Equation {
-                result: total / v,
-                values: self.values[..self.values.len() - (i + 1)].to_vec(),
-            };
-            if sub_eq.is_valid() {
-                return true;
-            }
-
-            // The divisor path failed, let's use `v` as a subtrahend and guard for underflows.
-            sub_eq.result = match total.checked_sub(*v) {
-                Some(n) => n,
-                None => return false,
-            };
-            if sub_eq.is_valid() {
-                return true;
-            }
-
-            // This equation is invalid, bail.
-            break;
+            // The divisor path failed, let's use `v` as a subtrahend.
+            total -= *v;
+            continue;
         }
 
         false
