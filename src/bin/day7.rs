@@ -83,13 +83,42 @@ impl Equation {
                 }
             }
 
-            // The divisor path failed, let's use `v` as a subtrahend.
+            if let Some(n) = disjoin(total, *v) {
+                // Since `total` could be disjoined, let's try this path too.
+                let sub_eq = Equation {
+                    result: n,
+                    values: self.values[..self.values.len() - (i + 1)].to_vec(),
+                };
+                if sub_eq.is_valid() {
+                    return true;
+                }
+            }
+
+            // Last ditch attempt to validate by using `v` as subtrahend.
             total -= *v;
-            continue;
         }
 
         false
     }
+}
+
+/// Disjoins `y` from `x` and returns the result.
+///
+/// If `y` is zero, less than `x` or not concatenated to `x`, `None` is returned.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(disjoin(1234, 34), Some(12));
+/// ```
+fn disjoin(x: u64, y: u64) -> Option<u64> {
+    let digits = y.checked_ilog10()? + 1;
+    let divisor = 10u64.pow(digits);
+    if y > x || x % divisor != y {
+        return None;
+    }
+
+    Some(x / divisor)
 }
 
 /// Sums the results of `equations`.
@@ -146,10 +175,10 @@ mod tests {
         assert!(es[0].is_valid());
         assert!(es[1].is_valid());
         assert!(!es[2].is_valid());
-        assert!(!es[3].is_valid());
-        assert!(!es[4].is_valid());
+        assert!(es[3].is_valid());
+        assert!(es[4].is_valid());
         assert!(!es[5].is_valid());
-        assert!(!es[6].is_valid());
+        assert!(es[6].is_valid());
         assert!(!es[7].is_valid());
         assert!(es[8].is_valid());
     }
@@ -158,7 +187,7 @@ mod tests {
     fn valid_equations_produce_expected_total() {
         let es = get_test_equations().into_iter().filter(Equation::is_valid);
 
-        assert_eq!(sum_results(es), 3749);
+        assert_eq!(sum_results(es), 11387);
     }
 
     #[test]
@@ -174,5 +203,14 @@ mod tests {
             values: vec![6],
         };
         assert!(!e.is_valid());
+    }
+
+    #[test]
+    fn disjoining_numbers_succeeds_for_valid_numbers() {
+        assert_eq!(disjoin(1234, 34), Some(12));
+        assert_eq!(disjoin(12345, 345), Some(12));
+        assert!(disjoin(1234, 35).is_none());
+        assert!(disjoin(34, 1234).is_none());
+        assert!(disjoin(0, 0).is_none());
     }
 }
